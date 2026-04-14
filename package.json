@@ -17,6 +17,8 @@
     "@walletconnect/modal": "^2.7.0",
     "@walletconnect/sign-client": "^2.23.9",
     "algosdk": "^3.5.2",
+    "clsx": "^2.1.1",
+    "framer-motion": "^12.38.0",
     "lucide-react": "^1.7.0",
     "lute-connect": "^1.7.0",
     "next": "16.2.2",
