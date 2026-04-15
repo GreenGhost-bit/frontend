@@ -54,6 +54,17 @@ export default function InvestorMarketplace() {
   const [secondaryPositions, setSecondaryPositions] = useState<any[]>([]);
   const [poolStats, setPoolStats] = useState({ totalLiquidity: 0, aggregateApy: 0, activeCount: 0 });
 
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [showDefaultModal, setShowDefaultModal] = useState(false);
+  const [penaltyData, setPenaltyData] = useState<any>(null);
+  const [defaultLoadingId, setDefaultLoadingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setIsAdmin(window.location.search.includes('admin=true'));
+    }
+  }, []);
+
   useEffect(() => {
     const fetchPools = async () => {
       try {
@@ -65,7 +76,7 @@ export default function InvestorMarketplace() {
           let activePos = 0;
           data.forEach((pool: any) => {
             tLiquidity += pool.totalLiquidity || 0;
-            sumApy += (pool.apy || 0) * (pool.totalLiquidity || 0);
+            sumApy += (pool.apyRate || 0) * (pool.totalLiquidity || 0);
             if (Array.isArray(pool.invoices)) {
                activePos += pool.invoices.filter((inv: any) => inv.status === 'FUNDED').length;
             } else {
@@ -211,6 +222,23 @@ export default function InvestorMarketplace() {
       setFundingId(null);
     }
   };
+
+  const handleSimulateDefault = async (invoiceId: string) => {
+    setDefaultLoadingId(invoiceId);
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/simulate-default/${invoiceId}`, { method: 'POST' });
+      const data = await res.json();
+      setPenaltyData(data.penaltyDistribution || []);
+      setShowDefaultModal(true);
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to simulate default.");
+    } finally {
+      setDefaultLoadingId(null);
+    }
+  };
+
+  const truncateAddr = (addr: string) => addr ? `${addr.substring(0, 6)}...${addr.substring(addr.length - 4)}` : '';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
@@ -478,6 +506,106 @@ export default function InvestorMarketplace() {
         </div>
       )}
       
+      {/* Admin Panel */}
+      {isAdmin && (
+        <motion.div 
+           initial={{ opacity: 0, y: 20 }}
+           animate={{ opacity: 1, y: 0 }}
+           className="mt-12 pt-8 border-t border-red-500/30 bg-red-900/10 p-6 rounded-2xl glass-panel relative overflow-hidden"
+        >
+           <div className="absolute top-0 right-0 w-64 h-64 bg-red-500/10 blur-[80px] pointer-events-none rounded-full" />
+           <h3 className="text-xl font-bold font-display text-red-500 mb-6 flex items-center gap-2">
+              <ShieldAlert size={20} /> Developer Console: Simulate Defaults
+           </h3>
+           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 relative z-10">
+              {invoices.filter(i => i.status === 'FUNDED').map(inv => (
+                 <div key={inv.id} className="bg-black/40 border border-red-500/20 p-4 rounded-xl flex justify-between items-center">
+                    <div>
+                       <div className="font-mono font-bold text-white mb-1">{inv.id}</div>
+                       <div className="text-xs text-gray-400">{inv.payor}</div>
+                    </div>
+                    <button 
+                       onClick={() => handleSimulateDefault(inv.id)}
+                       disabled={defaultLoadingId === inv.id}
+                       className="bg-orange-600/20 hover:bg-orange-600/40 text-orange-400 border border-orange-500/30 px-4 py-2 rounded-lg text-xs font-bold uppercase transition-all shadow-[0_0_10px_rgba(234,88,12,0.1)] hover:shadow-[0_0_15px_rgba(234,88,12,0.2)] disabled:opacity-50"
+                    >
+                       {defaultLoadingId === inv.id ? "Processing..." : "Simulate Default"}
+                    </button>
+                 </div>
+              ))}
+              {invoices.filter(i => i.status === 'FUNDED').length === 0 && (
+                 <div className="text-sm text-red-400/70 font-mono col-span-full">No active FUNDED invoices available to simulate default.</div>
+              )}
+           </div>
+        </motion.div>
+      )}
+
+      {/* Dramatic Modal */}
+      <AnimatePresence>
+         {showDefaultModal && (
+            <motion.div 
+               initial={{ opacity: 0 }}
+               animate={{ opacity: 1 }}
+               exit={{ opacity: 0 }}
+               className="fixed inset-0 bg-black/50 backdrop-blur-md z-[100] flex items-center justify-center p-4"
+            >
+               <motion.div 
+                  initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                  animate={{ scale: 1, opacity: 1, y: 0 }}
+                  exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                  className="bg-gray-900 border border-red-500/50 rounded-2xl w-full max-w-3xl overflow-hidden shadow-[0_0_50px_rgba(239,68,68,0.2)] relative"
+               >
+                  <div className="absolute top-0 inset-x-0 h-1 bg-red-500 animate-pulse" />
+                  <div className="p-6 border-b border-white/5 bg-red-500/5">
+                     <h2 className="text-2xl font-bold font-display text-red-500 flex items-center gap-3">
+                        <ShieldAlert size={28} /> Default event triggered!
+                     </h2>
+                     <p className="text-sm text-gray-400 mt-2">Oracle has identified a non-payment event. Smart contracts have initiated fractional penalty distribution.</p>
+                  </div>
+                  
+                  <div className="p-6 bg-[#0b0b11]">
+                     <div className="overflow-x-auto rounded-xl border border-white/5 bg-black/30">
+                        <table className="w-full text-left text-sm">
+                           <thead className="bg-white/5 border-b border-white/5 text-gray-400 font-mono uppercase text-[10px] tracking-wider">
+                              <tr>
+                                 <th className="p-4">Investor Address</th>
+                                 <th className="p-4">ASA Holdings</th>
+                                 <th className="p-4">Penalty Share (ALGO)</th>
+                                 <th className="p-4">Slashed %</th>
+                              </tr>
+                           </thead>
+                           <tbody className="divide-y divide-white/5 font-mono">
+                              {penaltyData && penaltyData.length > 0 ? (
+                                 penaltyData.map((d: any, idx: number) => (
+                                    <tr key={idx} className="hover:bg-white/5 transition-colors">
+                                       <td className="p-4 text-emerald-400">{truncateAddr(d.investorAddress || d.address || String(idx))}</td>
+                                       <td className="p-4 text-gray-300">{Number(d.asaHoldings || 0).toLocaleString()}</td>
+                                       <td className="p-4 text-red-400 font-bold">-{Number(d.penaltyAlgo || 0).toLocaleString(undefined, {maximumFractionDigits: 2})}</td>
+                                       <td className="p-4 text-gray-400">{Number(d.percentageOfTotal || 0).toFixed(2)}%</td>
+                                    </tr>
+                                 ))
+                              ) : (
+                                 <tr>
+                                    <td colSpan={4} className="p-6 text-center text-gray-500 font-sans italic">No penalty data distributed.</td>
+                                 </tr>
+                              )}
+                           </tbody>
+                        </table>
+                     </div>
+                  </div>
+
+                  <div className="p-6 bg-gray-900 border-t border-white/5 flex justify-end">
+                     <button 
+                        onClick={() => setShowDefaultModal(false)}
+                        className="px-6 py-2.5 bg-gray-800 hover:bg-gray-700 text-white font-medium rounded-lg transition-colors border border-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                     >
+                        Close
+                     </button>
+                  </div>
+               </motion.div>
+            </motion.div>
+         )}
+      </AnimatePresence>
     </div>
   );
 }

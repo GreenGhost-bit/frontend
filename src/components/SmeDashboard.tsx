@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { Calculator, UploadCloud, ShieldCheck, ArrowRight } from "lucide-react";
+import { Calculator, UploadCloud, ShieldCheck, ArrowRight, CheckCircle } from "lucide-react";
 import toast from "react-hot-toast";
 import { motion } from "framer-motion";
 import { BACKEND_URL } from "../config";
@@ -12,6 +12,7 @@ export default function SmeDashboard() {
   const [payor, setPayor] = useState<string>("Tata Motors");
   const [irn, setIrn] = useState<string>("IRN-1001-GSTIN-001");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [successData, setSuccessData] = useState<{ hash: string, presentValue: number, protocolFee: number } | null>(null);
 
   // Discount Formula: P = F * (1 - d * (t / 365))
   const discountRate = 0.12; 
@@ -33,12 +34,18 @@ export default function SmeDashboard() {
     setIsProcessing(true);
     
     try {
-      const verifyLoading = toast.loading("Verifying IRN with GST Oracle...");
+      const verifyLoading = toast.loading("Submitting invoice for funding...");
       
-      const res = await fetch(`${BACKEND_URL}/verify-invoice`, {
+      const dueDate = Date.now() + parseInt(maturityDays) * 86400000;
+      const res = await fetch(`${BACKEND_URL}/api/invoices/verify`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ irn, amount: parseFloat(amount), maturityDate: Date.now() + parseInt(maturityDays) * 86400000 })
+        body: JSON.stringify({ 
+          invoiceRef: irn, 
+          faceValue: parseFloat(amount), 
+          payorName: payor, 
+          dueDate 
+        })
       });
       
       const data = await res.json();
@@ -48,13 +55,13 @@ export default function SmeDashboard() {
         throw new Error(data.error || "Verification failed");
       }
       
-      toast.success("GST Verified! Signature obtained.");
+      toast.success("GST Verified! Invoice submitted successfully.");
       
-      const mintLoading = toast.loading("Minting Fractionalized ASA...");
-      await new Promise(r => setTimeout(r, 2000));
-      toast.dismiss(mintLoading);
-      toast.success("Invoice Tokenized! Your ASA is now live in the Marketplace.", { duration: 5000 });
-      setAmount("");
+      setSuccessData({
+         hash: data.hash,
+         presentValue: data.presentValue,
+         protocolFee: data.protocolFee
+      });
 
     } catch (e: any) {
       toast.error(e.message || "An error occurred");
@@ -62,6 +69,52 @@ export default function SmeDashboard() {
       setIsProcessing(false);
     }
   };
+
+  if (successData) {
+    return (
+      <motion.div 
+         initial={{ opacity: 0, scale: 0.95 }}
+         animate={{ opacity: 1, scale: 1 }}
+         className="glass-panel flex flex-col justify-center items-center" 
+         style={{ padding: '4rem', borderRadius: 'var(--radius-2xl)', textAlign: 'center', width: '100%', maxWidth: '800px', margin: '0 auto' }}
+      >
+        <CheckCircle size={64} color="var(--accent-emerald)" style={{ marginBottom: '1.5rem' }} />
+        <h2 className="text-3xl font-display font-bold text-white mb-3 text-gradient text-gradient-success">Invoice Successfully Tokenized!</h2>
+        <span className="bg-yellow-500/20 text-yellow-500 border border-yellow-500/30 text-sm font-bold px-4 py-1.5 rounded-full animate-pulse tracking-wide mb-8">
+          Awaiting investor funding
+        </span>
+        
+        <div className="bg-gray-900/60 p-6 rounded-xl border border-gray-800 w-full max-w-lg text-left flex flex-col gap-4">
+           <div className="flex justify-between items-center">
+              <span className="text-muted font-medium">Verified Face Value</span>
+              <span className="font-mono text-white text-lg">₹{parseFloat(amount).toLocaleString()}</span>
+           </div>
+           <div className="flex justify-between items-center">
+              <span className="text-muted font-medium">Calculated Present Value</span>
+              <span className="font-mono text-green-400 font-bold text-xl">₹{successData.presentValue.toLocaleString()}</span>
+           </div>
+           <div className="flex justify-between items-center">
+              <span className="text-muted font-medium">Factoring Protocol Fee</span>
+              <span className="font-mono text-red-400 font-medium">₹{successData.protocolFee.toLocaleString()}</span>
+           </div>
+           
+           <div className="flex flex-col gap-2 mt-4 pt-4 border-t border-gray-800">
+              <span className="text-muted text-xs uppercase tracking-widest font-bold">Box Storage Hash (SHA-256)</span>
+              <span className="font-mono text-sm text-indigo-300 break-all bg-black/40 p-3 rounded-lg border border-indigo-900/30">
+                {successData.hash}
+              </span>
+           </div>
+        </div>
+
+        <button 
+           onClick={() => { setSuccessData(null); setAmount(""); }} 
+           className="premium-btn btn-outline mt-10 w-full max-w-sm"
+        >
+           Submit Another Invoice
+        </button>
+      </motion.div>
+    );
+  }
 
   return (
     <div className="grid grid-cols-2 gap-8 items-start" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))' }}>
