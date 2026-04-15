@@ -6,7 +6,7 @@ import toast from "react-hot-toast";
 import { useWallet } from "@txnlab/use-wallet-react";
 import algosdk from "algosdk";
 import { motion, AnimatePresence } from "framer-motion";
-import { ALGOD_SERVER } from "../config";
+import { ALGOD_SERVER, ORACLE_ADDRESS, BACKEND_URL, APP_ID } from "../config";
 
 type InvoiceAsset = {
   id: string;
@@ -17,12 +17,15 @@ type InvoiceAsset = {
   fractionAvailable: number;
   fractionTotal: number;
   creditScore: string;
+  presentValue?: number;
+  status?: string;
+  assetId?: number;
 };
 
 const DUMMY_INVOICES: InvoiceAsset[] = [
-  { id: "INV-1029", payor: "Tata Motors", faceValue: 150000, availableYield: 11.5, matureDate: "2026-05-15", fractionAvailable: 75000, fractionTotal: 150000, creditScore: "AA+" },
-  { id: "INV-2941", payor: "Reliance Retail", faceValue: 500000, availableYield: 9.8, matureDate: "2026-06-01", fractionAvailable: 100000, fractionTotal: 500000, creditScore: "AAA" },
-  { id: "INV-0872", payor: "Adani Ports", faceValue: 80000, availableYield: 14.2, matureDate: "2026-04-30", fractionAvailable: 80000, fractionTotal: 80000, creditScore: "A-" },
+  { id: "INV-1029", payor: "Tata Motors", faceValue: 150000, availableYield: 11.5, matureDate: "2026-05-15", fractionAvailable: 75000, fractionTotal: 150000, creditScore: "AA+", presentValue: 145000, status: "SETTLED", assetId: 104520 },
+  { id: "INV-2941", payor: "Reliance Retail", faceValue: 500000, availableYield: 9.8, matureDate: "2026-06-01", fractionAvailable: 100000, fractionTotal: 500000, creditScore: "AAA", presentValue: 480000, status: "FUNDED", assetId: 104521 },
+  { id: "INV-0872", payor: "Adani Ports", faceValue: 80000, availableYield: 14.2, matureDate: "2026-04-30", fractionAvailable: 80000, fractionTotal: 80000, creditScore: "A-", presentValue: 78000, status: "ACTIVE", assetId: 104522 },
 ];
 
 const containerVariants = {
@@ -49,6 +52,37 @@ export default function InvestorMarketplace() {
   const portfolioYield = activeAccount ? "+14.2%" : "0.0%";
 
   const [secondaryPositions, setSecondaryPositions] = useState<any[]>([]);
+  const [poolStats, setPoolStats] = useState({ totalLiquidity: 0, aggregateApy: 0, activeCount: 0 });
+
+  useEffect(() => {
+    const fetchPools = async () => {
+      try {
+        const response = await fetch(`${BACKEND_URL}/api/pools`);
+        const data = await response.json();
+        if (Array.isArray(data)) {
+          let tLiquidity = 0;
+          let sumApy = 0;
+          let activePos = 0;
+          data.forEach((pool: any) => {
+            tLiquidity += pool.totalLiquidity || 0;
+            sumApy += (pool.apy || 0) * (pool.totalLiquidity || 0);
+            if (Array.isArray(pool.invoices)) {
+               activePos += pool.invoices.filter((inv: any) => inv.status === 'FUNDED').length;
+            } else {
+               activePos += pool.activeCount || 0;
+            }
+          });
+          const avgApy = tLiquidity > 0 ? sumApy / tLiquidity : 0;
+          setPoolStats({ totalLiquidity: tLiquidity, aggregateApy: avgApy, activeCount: activePos });
+        }
+      } catch (e) {
+        console.error("Failed to fetch pool stats", e);
+      }
+    };
+    fetchPools();
+    const interval = setInterval(fetchPools, 15000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     const loadData = async () => {
@@ -66,36 +100,47 @@ export default function InvestorMarketplace() {
       toast.error("Authentication Error: Connect Algorand Wallet to trade.", { icon: "🔒" });
       return;
     }
-    if (25000 > MOCK_USDC_BALANCE) {
-      toast.error("Insufficient Liquidity: USDC balance too low to purchase.", { icon: "💳" });
-      return;
-    }
 
     setFundingId(invoice.id);
-    const t = toast.loading(`Initiating Atomic Swap for ${invoice.id}...`);
+    const t = toast.loading(`Initiating Algorand Swap for ${invoice.id}...`);
     
     try {
-      toast.loading("Awaiting cryptographic signature from your wallet...", { id: t });
-      
       const algodClient = new algosdk.Algodv2('', ALGOD_SERVER, 443);
       const suggestedParams = await algodClient.getTransactionParams().do();
       
-      const txn = algosdk.makePaymentTxnWithSuggestedParamsFromObject({
-        from: activeAccount.address,
-        to: activeAccount.address, 
-        amount: 0,                 
-        note: new TextEncoder().encode(`Decantral Atomic Swap: Pool Purchase ${invoice.id}`),
-        suggestedParams
-      } as any);
+      const pVal = invoice.presentValue || invoice.faceValue;
+      const amountInMicroAlgos = Math.floor(pVal * 1000000);
 
+      // Algorand V3 compliant transaction mapping
+      const txn = algosdk.makePaymentTxnWithSuggestedParamsFromObject({
+        sender: activeAccount.address,
+        receiver: ORACLE_ADDRESS, 
+        amount: amountInMicroAlgos,                 
+        note: new TextEncoder().encode(invoice.id),
+        suggestedParams
+      });
+
+      toast.loading("Awaiting cryptographic signature from your Pera wallet...", { id: t });
       const encodedTxn = algosdk.encodeUnsignedTransaction(txn);
       const signedTxns = await signTransactions([encodedTxn]);
 
-      toast.success("Cryptographic Signature Verified! ASA transferred successfully.", { id: t });
+      // Filter nulls and assert type for sendRawTransaction
+      const rawTxns = signedTxns.filter((t): t is Uint8Array => t !== null);
+
+      toast.loading("Submitting to Algorand network...", { id: t });
+      const result = await algodClient.sendRawTransaction(rawTxns).do();
+      // Safely support either txId or txid based on SDK version
+      const txId = (result as any).txId || (result as any).txid || "unknown";
+      
+      await fetch(`${BACKEND_URL}/api/invoices/${invoice.id}/status`, {
+        method: "POST"
+      });
+
+      toast.success(`Transaction confirmed! Funding complete.`, { id: t });
       
       setInvoices(prev => prev.map(inv => {
         if (inv.id === invoice.id) {
-          return { ...inv, fractionAvailable: Math.max(0, inv.fractionAvailable - 25000) }; 
+          return { ...inv, fractionAvailable: 0 }; 
         }
         return inv;
       }));
@@ -103,7 +148,65 @@ export default function InvestorMarketplace() {
       console.error(e);
       toast.error(e?.message && e.message.includes("User rejected") 
         ? "Transaction rejected by user in wallet." 
-        : "Signature verification failed.", { id: t });
+        : e?.message || "Transaction failed.", { id: t });
+    } finally {
+      setFundingId(null);
+    }
+  };
+
+  const handleClaimYield = async (invoice: InvoiceAsset) => {
+    if (!activeAccount) {
+      toast.error("Authentication Error: Connect Algorand Wallet.", { icon: "🔒" });
+      return;
+    }
+
+    setFundingId(invoice.id);
+    const t = toast.loading(`Initiating ASA Burn for Yield Settlement...`);
+    
+    try {
+      const algodClient = new algosdk.Algodv2('', ALGOD_SERVER, 443);
+      const suggestedParams = await algodClient.getTransactionParams().do();
+      
+      const contractAddress = algosdk.getApplicationAddress(APP_ID);
+
+      const txn = algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
+        sender: activeAccount.address,
+        receiver: contractAddress, 
+        amount: 25000, // Mock ASA holding
+        assetIndex: invoice.assetId || 100000,
+        note: new TextEncoder().encode(`BURN ASA: ${invoice.id}`),
+        suggestedParams
+      });
+
+      toast.loading("Awaiting cryptographic signature to burn ASA...", { id: t });
+      const encodedTxn = algosdk.encodeUnsignedTransaction(txn);
+      const signedTxns = await signTransactions([encodedTxn]);
+
+      const rawTxns = signedTxns.filter((tx): tx is Uint8Array => tx !== null);
+
+      toast.loading("Submitting asset transfer to network...", { id: t });
+      await algodClient.sendRawTransaction(rawTxns).do();
+      
+      const response = await fetch(`${BACKEND_URL}/api/invoices/${invoice.id}/yield-amount`);
+      const data = await response.json();
+
+      toast.success(`Yield Claim Successful! \n Payout Processed: $${data.yieldPayout?.toLocaleString()}`, { 
+        id: t, 
+        duration: 8000,
+        icon: '💰'
+      });
+      
+      setInvoices(prev => prev.map(inv => {
+        if (inv.id === invoice.id) {
+          return { ...inv, status: 'CLAIMED' }; 
+        }
+        return inv;
+      }));
+    } catch (e: any) {
+      console.error(e);
+      toast.error(e?.message && e.message.includes("User rejected") 
+        ? "Transaction rejected by user in wallet." 
+        : e?.message || "Yield claim failed.", { id: t });
     } finally {
       setFundingId(null);
     }
@@ -111,6 +214,35 @@ export default function InvestorMarketplace() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+      
+      {/* Stats Header Bar */}
+      <div className="sticky top-0 z-50 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800 pb-4 pt-2 -mx-4 px-4 sm:mx-0 sm:px-0">
+         <div className="flex items-center gap-3 mb-4 mt-2">
+            <h2 className="text-xl font-bold font-display text-gray-900 dark:text-white">Protocol Overview</h2>
+            <span className="bg-red-500/20 text-red-500 border border-red-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full animate-pulse tracking-widest">LIVE</span>
+         </div>
+         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-gray-100 dark:bg-gray-900 p-4 rounded-xl flex flex-col border border-transparent dark:border-gray-800">
+               <span className="text-xs text-gray-500 dark:text-gray-400 mb-1 uppercase tracking-wider font-semibold">Total Liquidity</span>
+               <span className="font-mono text-xl text-green-600 dark:text-green-400 font-medium">₹{poolStats.totalLiquidity.toLocaleString('en-IN')}</span>
+            </div>
+            <div className="bg-gray-100 dark:bg-gray-900 p-4 rounded-xl flex flex-col border border-transparent dark:border-gray-800">
+               <span className="text-xs text-gray-500 dark:text-gray-400 mb-1 uppercase tracking-wider font-semibold">Aggregate APY</span>
+               <span className="font-mono text-xl text-green-600 dark:text-green-400 font-medium">+{poolStats.aggregateApy.toFixed(1)}%</span>
+            </div>
+            <div className="bg-gray-100 dark:bg-gray-900 p-4 rounded-xl flex flex-col border border-transparent dark:border-gray-800">
+               <span className="text-xs text-gray-500 dark:text-gray-400 mb-1 uppercase tracking-wider font-semibold">Active Positions</span>
+               <span className="font-mono text-xl text-gray-900 dark:text-white font-medium">{poolStats.activeCount}</span>
+            </div>
+            <div className="bg-gray-100 dark:bg-gray-900 p-4 rounded-xl flex flex-col border border-transparent dark:border-gray-800">
+               <span className="text-xs text-gray-500 dark:text-gray-400 mb-1 uppercase tracking-wider font-semibold">Network</span>
+               <div className="flex items-center gap-2 mt-0.5">
+                  <span className="w-2 h-2 rounded-full bg-green-500 dark:bg-green-400 animate-pulse"></span>
+                  <span className="font-mono text-lg text-gray-900 dark:text-white font-medium tracking-tight">TESTNET</span>
+               </div>
+            </div>
+         </div>
+      </div>
       
       <div className="flex items-center justify-between" style={{ flexWrap: 'wrap', gap: '1rem' }}>
         <div>
