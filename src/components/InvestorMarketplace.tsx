@@ -216,25 +216,25 @@ export default function InvestorMarketplace() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
       
       {/* Stats Header Bar */}
-      <div className="sticky top-0 z-50 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800 pb-4 pt-2 -mx-4 px-4 sm:mx-0 sm:px-0">
+      <div className="sticky top-0 z-50 glass-header pb-4 pt-2 -mx-4 px-4 sm:mx-0 sm:px-0">
          <div className="flex items-center gap-3 mb-4 mt-2">
             <h2 className="text-xl font-bold font-display text-gray-900 dark:text-white">Protocol Overview</h2>
-            <span className="bg-red-500/20 text-red-500 border border-red-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full animate-pulse tracking-widest">LIVE</span>
+            <span className="bg-red-500/20 text-red-500 border border-red-500/30 text-[10px] font-bold px-2.5 py-0.5 rounded-full animate-pulse tracking-widest flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>LIVE</span>
          </div>
          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-gray-100 dark:bg-gray-900 p-4 rounded-xl flex flex-col border border-transparent dark:border-gray-800">
+            <div className="bg-gray-100 dark:bg-gray-900 p-4 rounded-xl flex flex-col border border-gray-200 dark:border-gray-800 transition-all hover:-translate-y-1 hover:shadow-lg dark:hover:shadow-gray-900/50">
                <span className="text-xs text-gray-500 dark:text-gray-400 mb-1 uppercase tracking-wider font-semibold">Total Liquidity</span>
-               <span className="font-mono text-xl text-green-600 dark:text-green-400 font-medium">₹{poolStats.totalLiquidity.toLocaleString('en-IN')}</span>
+               <span className="font-mono text-xl text-green-600 dark:text-green-400 font-medium tracking-tight">₹{poolStats.totalLiquidity.toLocaleString('en-IN')}</span>
             </div>
-            <div className="bg-gray-100 dark:bg-gray-900 p-4 rounded-xl flex flex-col border border-transparent dark:border-gray-800">
+            <div className="bg-gray-100 dark:bg-gray-900 p-4 rounded-xl flex flex-col border border-gray-200 dark:border-gray-800 transition-all hover:-translate-y-1 hover:shadow-lg dark:hover:shadow-gray-900/50">
                <span className="text-xs text-gray-500 dark:text-gray-400 mb-1 uppercase tracking-wider font-semibold">Aggregate APY</span>
-               <span className="font-mono text-xl text-green-600 dark:text-green-400 font-medium">+{poolStats.aggregateApy.toFixed(1)}%</span>
+               <span className="font-mono text-xl text-green-600 dark:text-green-400 font-medium tracking-tight">+{poolStats.aggregateApy.toFixed(1)}%</span>
             </div>
-            <div className="bg-gray-100 dark:bg-gray-900 p-4 rounded-xl flex flex-col border border-transparent dark:border-gray-800">
+            <div className="bg-gray-100 dark:bg-gray-900 p-4 rounded-xl flex flex-col border border-gray-200 dark:border-gray-800 transition-all hover:-translate-y-1 hover:shadow-lg dark:hover:shadow-gray-900/50">
                <span className="text-xs text-gray-500 dark:text-gray-400 mb-1 uppercase tracking-wider font-semibold">Active Positions</span>
-               <span className="font-mono text-xl text-gray-900 dark:text-white font-medium">{poolStats.activeCount}</span>
+               <span className="font-mono text-xl text-gray-900 dark:text-white font-medium tracking-tight">{poolStats.activeCount}</span>
             </div>
-            <div className="bg-gray-100 dark:bg-gray-900 p-4 rounded-xl flex flex-col border border-transparent dark:border-gray-800">
+            <div className="bg-gray-100 dark:bg-gray-900 p-4 rounded-xl flex flex-col border border-gray-200 dark:border-gray-800 transition-all hover:-translate-y-1 hover:shadow-lg dark:hover:shadow-gray-900/50">
                <span className="text-xs text-gray-500 dark:text-gray-400 mb-1 uppercase tracking-wider font-semibold">Network</span>
                <div className="flex items-center gap-2 mt-0.5">
                   <span className="w-2 h-2 rounded-full bg-green-500 dark:bg-green-400 animate-pulse"></span>
