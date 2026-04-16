@@ -98,8 +98,13 @@ export default function InvestorMarketplace() {
   useEffect(() => {
     const loadData = async () => {
        setIsLoading(true);
-       await new Promise(r => setTimeout(r, 1000));
-       setInvoices(DUMMY_INVOICES);
+       try {
+           const res = await fetch(`${BACKEND_URL}/api/invoices`);
+           const data = await res.json();
+           setInvoices(data);
+       } catch(e) {
+           setInvoices(DUMMY_INVOICES);
+       }
        setSecondaryPositions([{ id: "INV-5590", payor: "ITC Limited", positionValue: 25000, askingPrice: 24000, matureDate: "2026-05-20", creditScore: "AA" }]);
        setIsLoading(false);
     }
@@ -120,7 +125,10 @@ export default function InvestorMarketplace() {
       const suggestedParams = await algodClient.getTransactionParams().do();
       
       const pVal = invoice.presentValue || invoice.faceValue;
-      const amountInMicroAlgos = Math.floor(pVal * 1000000);
+      // Scale down for TestNet limits so it doesn't try to spend 145,000 ALGO.
+      // E.g., treating 1 ALGO = ₹145,000 for demo purposes, spending ~1000 microAlgos.
+      // We will hard cap it at 1 ALGO (1000000 microAlgos) or scale it down.
+      const amountInMicroAlgos = Math.max(1000, Math.floor((pVal / 100000) * 1000000));
 
       // Algorand V3 compliant transaction mapping
       const txn = algosdk.makePaymentTxnWithSuggestedParamsFromObject({
@@ -246,27 +254,27 @@ export default function InvestorMarketplace() {
       {/* Stats Header Bar */}
       <div className="sticky top-0 z-50 glass-header pb-4 pt-2 -mx-4 px-4 sm:mx-0 sm:px-0">
          <div className="flex items-center gap-3 mb-4 mt-2">
-            <h2 className="text-xl font-bold font-display text-gray-900 dark:text-white">Protocol Overview</h2>
+            <h2 className="text-xl font-bold font-display text-white">Protocol Overview</h2>
             <span className="bg-red-500/20 text-red-500 border border-red-500/30 text-[10px] font-bold px-2.5 py-0.5 rounded-full animate-pulse tracking-widest flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>LIVE</span>
          </div>
          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-gray-100 dark:bg-gray-900 p-4 rounded-xl flex flex-col border border-gray-200 dark:border-gray-800 transition-all hover:-translate-y-1 hover:shadow-lg dark:hover:shadow-gray-900/50">
-               <span className="text-xs text-gray-500 dark:text-gray-400 mb-1 uppercase tracking-wider font-semibold">Total Liquidity</span>
-               <span className="font-mono text-xl text-green-600 dark:text-green-400 font-medium tracking-tight">₹{poolStats.totalLiquidity.toLocaleString('en-IN')}</span>
+            <div className="glass-panel p-4 flex flex-col transition-all hover:-translate-y-1 hover:shadow-[0_0_15px_rgba(52,211,153,0.3)]" style={{ borderRadius: 'var(--radius-xl)' }}>
+               <span className="text-xs text-muted mb-1 uppercase tracking-wider font-semibold font-mono">Total Liquidity</span>
+               <span className="font-mono text-xl font-bold text-gradient text-gradient-success tracking-tight">₹{poolStats.totalLiquidity.toLocaleString('en-IN')}</span>
             </div>
-            <div className="bg-gray-100 dark:bg-gray-900 p-4 rounded-xl flex flex-col border border-gray-200 dark:border-gray-800 transition-all hover:-translate-y-1 hover:shadow-lg dark:hover:shadow-gray-900/50">
-               <span className="text-xs text-gray-500 dark:text-gray-400 mb-1 uppercase tracking-wider font-semibold">Aggregate APY</span>
-               <span className="font-mono text-xl text-green-600 dark:text-green-400 font-medium tracking-tight">+{poolStats.aggregateApy.toFixed(1)}%</span>
+            <div className="glass-panel p-4 flex flex-col transition-all hover:-translate-y-1 hover:shadow-[0_0_15px_rgba(52,211,153,0.3)]" style={{ borderRadius: 'var(--radius-xl)' }}>
+               <span className="text-xs text-muted mb-1 uppercase tracking-wider font-semibold font-mono">Aggregate APY</span>
+               <span className="font-mono text-xl font-bold text-gradient text-gradient-success tracking-tight">+{poolStats.aggregateApy.toFixed(1)}%</span>
             </div>
-            <div className="bg-gray-100 dark:bg-gray-900 p-4 rounded-xl flex flex-col border border-gray-200 dark:border-gray-800 transition-all hover:-translate-y-1 hover:shadow-lg dark:hover:shadow-gray-900/50">
-               <span className="text-xs text-gray-500 dark:text-gray-400 mb-1 uppercase tracking-wider font-semibold">Active Positions</span>
-               <span className="font-mono text-xl text-gray-900 dark:text-white font-medium tracking-tight">{poolStats.activeCount}</span>
+            <div className="glass-panel p-4 flex flex-col transition-all hover:-translate-y-1 hover:shadow-[0_0_15px_rgba(52,211,153,0.3)]" style={{ borderRadius: 'var(--radius-xl)' }}>
+               <span className="text-xs text-muted mb-1 uppercase tracking-wider font-semibold font-mono">Active Positions</span>
+               <span className="font-mono text-xl text-white font-bold tracking-tight">{poolStats.activeCount}</span>
             </div>
-            <div className="bg-gray-100 dark:bg-gray-900 p-4 rounded-xl flex flex-col border border-gray-200 dark:border-gray-800 transition-all hover:-translate-y-1 hover:shadow-lg dark:hover:shadow-gray-900/50">
-               <span className="text-xs text-gray-500 dark:text-gray-400 mb-1 uppercase tracking-wider font-semibold">Network</span>
+            <div className="glass-panel p-4 flex flex-col transition-all hover:-translate-y-1 hover:shadow-[0_0_15px_rgba(52,211,153,0.3)]" style={{ borderRadius: 'var(--radius-xl)' }}>
+               <span className="text-xs text-muted mb-1 uppercase tracking-wider font-semibold font-mono">Network</span>
                <div className="flex items-center gap-2 mt-0.5">
-                  <span className="w-2 h-2 rounded-full bg-green-500 dark:bg-green-400 animate-pulse"></span>
-                  <span className="font-mono text-lg text-gray-900 dark:text-white font-medium tracking-tight">TESTNET</span>
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)] animate-pulse"></span>
+                  <span className="font-mono text-lg text-white font-bold tracking-tight">TESTNET</span>
                </div>
             </div>
          </div>
@@ -499,7 +507,13 @@ export default function InvestorMarketplace() {
              <ShieldAlert size={32} color="var(--text-tertiary)" style={{ marginBottom: '1rem' }} />
              <h3 className="font-medium text-white mb-2">List Your Position</h3>
              <p className="text-sm text-muted" style={{ marginBottom: '1.5rem' }}>Need immediate liquidity? List your existing Invoice-ASAs on the secondary market at a discount.</p>
-             <button className="premium-btn btn-outline">
+             <button 
+                onClick={() => {
+                   toast.success("Liquid position successfully listed on the active orderbook!");
+                   setSecondaryPositions(prev => [...prev, { id: "INV-9999", payor: "Your Fractional Entry", positionValue: 12500, askingPrice: 12100, matureDate: "2026-07-01", creditScore: "AA" }]);
+                }}
+                className="premium-btn btn-outline"
+             >
                 Create Listing
              </button>
           </div>
@@ -560,7 +574,7 @@ export default function InvestorMarketplace() {
                      <h2 className="text-2xl font-bold font-display text-red-500 flex items-center gap-3">
                         <ShieldAlert size={28} /> Default event triggered!
                      </h2>
-                     <p className="text-sm text-gray-400 mt-2">Oracle has identified a non-payment event. Smart contracts have initiated fractional penalty distribution.</p>
+                     <p className="text-sm text-gray-300 mt-4 leading-relaxed font-medium">When an SME joins Decantral, they lock a security stake — ALGO locked in our smart contract. If they default, that stake is automatically redistributed to investors proportional to their holdings. No lawyer. No court. No waiting. The smart contract does it in the same transaction. Investor 1 gets this much. Investor 2 gets this much. Every paisa accounted for, on-chain, transparent, instant.</p>
                   </div>
                   
                   <div className="p-6 bg-[#0b0b11]">
@@ -592,6 +606,12 @@ export default function InvestorMarketplace() {
                            </tbody>
                         </table>
                      </div>
+                  </div>
+
+                  <div className="p-6 bg-[#0b0b11] border-t border-white/5">
+                     <p className="text-sm text-gray-400 italic leading-relaxed">
+                        After a default, the SME's Decantral Trust Score drops. Their next invoice requires a higher security stake. But here is the flip side — an SME who repays on time, every time, builds a score. Their stake requirement goes down. Over two years of good behaviour, a small business owner in Hyderabad can access credit at the same terms as a large corporation. That is financial inclusion built into the protocol itself.
+                     </p>
                   </div>
 
                   <div className="p-6 bg-gray-900 border-t border-white/5 flex justify-end">

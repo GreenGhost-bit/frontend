@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Calculator, UploadCloud, ShieldCheck, ArrowRight, CheckCircle } from "lucide-react";
 import toast from "react-hot-toast";
 import { motion } from "framer-motion";
@@ -13,6 +13,25 @@ export default function SmeDashboard() {
   const [irn, setIrn] = useState<string>("IRN-1001-GSTIN-001");
   const [isProcessing, setIsProcessing] = useState(false);
   const [successData, setSuccessData] = useState<{ hash: string, presentValue: number, protocolFee: number } | null>(null);
+  
+  const [trustScore, setTrustScore] = useState(94);
+
+  useEffect(() => {
+    fetch(`${BACKEND_URL}/api/invoices`)
+      .then(res => res.json())
+      .then(data => {
+         const hasDefaults = data.some((inv: any) => inv.status === 'DEFAULTED');
+         if (hasDefaults) {
+            setTrustScore(42);
+         } else {
+            setTrustScore(94);
+         }
+      })
+      .catch(console.error);
+  }, []);
+
+  const circumference = 2 * Math.PI * 18;
+  const strokeDashoffset = circumference - (trustScore / 100) * circumference;
 
   // Discount Formula: P = F * (1 - d * (t / 365))
   const discountRate = 0.12; 
@@ -131,14 +150,27 @@ export default function SmeDashboard() {
              <UploadCloud size={24} color="var(--accent-indigo-light)" />
              Tokenize New Invoice
            </h2>
-           <div style={{ 
-             background: 'rgba(99, 102, 241, 0.1)', border: '1px solid rgba(99, 102, 241, 0.3)', 
-             padding: '0.4rem 0.8rem', borderRadius: 'var(--radius-lg)', display: 'flex', alignItems: 'center', gap: '0.5rem' 
-           }}>
-              <ShieldCheck size={16} color="var(--accent-indigo-light)" />
-              <span className="text-sm font-medium" style={{ color: 'var(--accent-indigo-light)' }}>
-                Trust Score: <span className="font-bold text-white">94/100</span>
-              </span>
+           <div className="flex items-center gap-3 bg-indigo-950/30 p-1.5 pr-4 rounded-full border border-indigo-500/20 shadow-inner">
+              <div className="relative w-12 h-12 flex items-center justify-center">
+                 <svg className="w-full h-full transform -rotate-90 drop-shadow-md" viewBox="0 0 44 44">
+                    <circle cx="22" cy="22" r="18" fill="none" stroke="rgba(99, 102, 241, 0.2)" strokeWidth="4" />
+                    <motion.circle 
+                       cx="22" cy="22" r="18" fill="none" 
+                       stroke={trustScore > 50 ? "#10b981" : "#ef4444"} 
+                       strokeWidth="4" 
+                       strokeLinecap="round"
+                       initial={{ strokeDashoffset: circumference }}
+                       animate={{ strokeDashoffset }}
+                       transition={{ duration: 1.5, ease: "easeOut" }}
+                       strokeDasharray={circumference} 
+                    />
+                 </svg>
+                 <span className="absolute text-xs font-bold font-mono text-white">{trustScore}</span>
+              </div>
+              <div className="flex flex-col">
+                 <span className="text-[10px] uppercase tracking-wider text-muted font-bold">Decantral</span>
+                 <span className="text-sm font-semibold text-white leading-tight">Trust Score</span>
+              </div>
            </div>
         </div>
 
